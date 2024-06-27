@@ -154,10 +154,28 @@ class DeterministicDecoder(ActionDecoder):
         self.out_features = out_features
         self.window_size = window_size
         self.multi_step_action = multi_step_action
-        self.actions = MLPTanhHead(hidden_size, out_features*multi_step_action)
+        # self.actions = MLPTanhHead(hidden_size, out_features*multi_step_action)
         self.hidden_state = None
         self.hidden_size = hidden_size
         self.global_1d_pool = nn.AdaptiveMaxPool1d(1)
+        # self.mlp = torch.nn.Sequential(
+        #     torch.nn.Linear(self.hidden_size, 1024),
+        #     torch.nn.ReLU(),
+        #     torch.nn.Linear(1024, 512),
+        #     torch.nn.ReLU(),
+        #     torch.nn.Linear(512, 256),
+        #     torch.nn.ReLU(),
+        #     torch.nn.Linear(256, out_features*multi_step_action),
+        #     torch.nn.Tanh(),
+        # )
+        self.linear1 = nn.Linear(self.hidden_size, 1024)
+        self.relu1 = nn.ReLU()
+        self.linear2 = nn.Linear(1024, 512)
+        self.relu2 = nn.ReLU()
+        self.linear3 = nn.Linear(512, 256)
+        self.relu3 = nn.ReLU()
+        self.linear4 = nn.Linear(256, out_features * multi_step_action)
+        self.tanh = nn.Tanh()
 
         
 
@@ -175,9 +193,15 @@ class DeterministicDecoder(ActionDecoder):
             input_feature = self.global_1d_pool(input_feature.permute(0, 2, 1)).squeeze(-1)
         input_feature = input_feature.reshape(-1, self.window_size, input_feature.shape[1])
         
-        actions = self.actions(input_feature)
+        # actions = self.actions(input_feature)
+        # actions = self.mlp(actions)
+        x = self.relu1(self.linear1(input_feature))
+        x = self.relu2(self.linear2(x))
+        x = self.relu3(self.linear3(x))
+        actions = self.tanh(self.linear4(x))
 
         return actions
+        # return input_feature
 
 
     def act(

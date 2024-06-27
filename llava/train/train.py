@@ -327,8 +327,10 @@ def preprocess_multimodal(
             if data_args.mm_use_im_start_end:
                 replace_token = DEFAULT_IM_START_TOKEN + replace_token + DEFAULT_IM_END_TOKEN
             sentence["value"] = sentence["value"].replace(DEFAULT_IMAGE_TOKEN, replace_token)
-    # print(sources)
-
+    # print(f'sources: {sources}')
+    '''
+    sources: [[{'from': 'human', 'value': 'Here is a frame of surgical activity. <image>\nThe gesture of the frame is Moving to center with needle in grip, please predict kinematics information of this frame in 1 X 76 tensor.'}, 
+                {'from': 'gpt', 'value': '0.19526900,0.02178900,...'}]]'''
     return sources
 
 
@@ -437,9 +439,18 @@ def preprocess_v1(
         conversations.append(conv.get_prompt())
 
     # Tokenize conversations
-
+    input_ids = []
+    targets = []
+    
     if has_image:
-        input_ids = torch.stack([tokenizer_image_token(prompt, tokenizer, return_tensors='pt') for prompt in conversations], dim=0)
+        # NOTE: origin 
+        # input_ids = torch.stack([tokenizer_image_token(prompt, tokenizer, return_tensors='pt') for prompt in conversations], dim=0)
+
+        # NOTE: modified, allow numeric labels
+        for prompt in conversations:
+            input, labels = tokenizer_image_token(prompt, tokenizer, return_tensors="pt")
+            input_ids.append(input)
+            targets.append(labels)
     else:
         input_ids = tokenizer(
             conversations,
@@ -449,50 +460,54 @@ def preprocess_v1(
             truncation=True,
         ).input_ids
 
-    targets = input_ids.clone()
+    # NOTE: Nodified
+    input_ids = torch.stack(input_ids, dim=0)
+    targets = torch.stack(targets, dim=0)
 
-    assert conv.sep_style == conversation_lib.SeparatorStyle.TWO
+    # NOTE: origin
+    # targets = input_ids.clone()
 
-    # Mask targets
-    sep = conv.sep + conv.roles[1] + ": "
-    for conversation, target in zip(conversations, targets):
-        total_len = int(target.ne(tokenizer.pad_token_id).sum())
+    # assert conv.sep_style == conversation_lib.SeparatorStyle.TWO
+    # # Mask targets
+    # sep = conv.sep + conv.roles[1] + ": "
+    # for conversation, target in zip(conversations, targets):
+    #     total_len = int(target.ne(tokenizer.pad_token_id).sum())
 
-        rounds = conversation.split(conv.sep2)
-        cur_len = 1
-        target[:cur_len] = IGNORE_INDEX
-        for i, rou in enumerate(rounds):
-            if rou == "":
-                break
+    #     rounds = conversation.split(conv.sep2)
+    #     cur_len = 1
+    #     target[:cur_len] = IGNORE_INDEX
+    #     for i, rou in enumerate(rounds):
+    #         if rou == "":
+    #             break
 
-            parts = rou.split(sep)
-            if len(parts) != 2:
-                break
-            parts[0] += sep
+    #         parts = rou.split(sep)
+    #         if len(parts) != 2:
+    #             break
+    #         parts[0] += sep
 
-            if has_image:
-                round_len = len(tokenizer_image_token(rou, tokenizer))
-                instruction_len = len(tokenizer_image_token(parts[0], tokenizer)) - 2
-            else:
-                round_len = len(tokenizer(rou).input_ids)
-                instruction_len = len(tokenizer(parts[0]).input_ids) - 2
+    #         if has_image:
+    #             round_len = len(tokenizer_image_token(rou, tokenizer))
+    #             instruction_len = len(tokenizer_image_token(parts[0], tokenizer)) - 2
+    #         else:
+    #             round_len = len(tokenizer(rou).input_ids)
+    #             instruction_len = len(tokenizer(parts[0]).input_ids) - 2
 
-            if i != 0 and not tokenizer.legacy and IS_TOKENIZER_GREATER_THAN_0_14:
-                round_len -= 1
-                instruction_len -= 1
+    #         if i != 0 and not tokenizer.legacy and IS_TOKENIZER_GREATER_THAN_0_14:
+    #             round_len -= 1
+    #             instruction_len -= 1
 
-            target[cur_len : cur_len + instruction_len] = IGNORE_INDEX
+    #         target[cur_len : cur_len + instruction_len] = IGNORE_INDEX
 
-            cur_len += round_len
-        target[cur_len:] = IGNORE_INDEX
+    #         cur_len += round_len
+    #     target[cur_len:] = IGNORE_INDEX
 
-        if cur_len < tokenizer.model_max_length:
-            if cur_len != total_len:
-                target[:] = IGNORE_INDEX
-                print(
-                    f"WARNING: tokenization mismatch: {cur_len} vs. {total_len}."
-                    f" (ignored)"
-                )
+    #     if cur_len < tokenizer.model_max_length:
+            # if cur_len != total_len:
+            #     target[:] = IGNORE_INDEX
+            #     print(
+            #         f"WARNING: tokenization mismatch: {cur_len} vs. {total_len}."
+            #         f" (ignored)"
+            #     )
 
     return dict(
         input_ids=input_ids,

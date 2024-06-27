@@ -184,7 +184,22 @@ def process_images(images, image_processor, model_cfg):
 
 def tokenizer_image_token(prompt, tokenizer, image_token_index=IMAGE_TOKEN_INDEX, return_tensors=None):
     # print(len(prompt.split('<image>')))
-    prompt_chunks = [tokenizer(chunk).input_ids for chunk in prompt.split('<image>')]
+    # print(prompt)
+    result = prompt.split('ASSISTANT: ')
+    assert len(result) == 2, "split more than one"
+
+    text_prompt, labels = result[0], result[1]
+    # process labels
+    labels = labels.replace('</s>', '')
+    labels = labels.split(',')
+    labels = [float(num) for num in labels]
+
+    # print(f'len of labels : {len(labels)}')
+    # print('origin labels: ', labels)
+    # print("labels:", torch.tensor(labels, dtype=torch.long))
+    # print("labels:", torch.tensor(labels, dtype=torch.float))
+
+    prompt_chunks = [tokenizer(chunk).input_ids for chunk in text_prompt.split('<image>')]
 
     def insert_separator(X, sep):
         return [ele for sublist in zip(X, [sep]*len(X)) for ele in sublist][:-1]
@@ -198,9 +213,11 @@ def tokenizer_image_token(prompt, tokenizer, image_token_index=IMAGE_TOKEN_INDEX
     for x in insert_separator(prompt_chunks, [image_token_index] * (offset + 1)):
         input_ids.extend(x[offset:])
 
+    # print(f"input_ids: {input_ids}")
     if return_tensors is not None:
         if return_tensors == 'pt':
-            return torch.tensor(input_ids, dtype=torch.long)
+            # 只有torch.float 才能保持浮点数形式
+            return torch.tensor(input_ids, dtype=torch.long), torch.tensor(labels, dtype=torch.float32)
         raise ValueError(f'Unsupported tensor type: {return_tensors}')
     return input_ids
 
