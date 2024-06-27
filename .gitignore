@@ -41,3 +41,9 @@ pretrain_model/
 # flash attention 
 flash_attention/
 
+.devcontainer/
+
+.vscode/
+
+
+
