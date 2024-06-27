@@ -1,0 +1,4 @@
+python hf_download.py --model lmsys/vicuna-7b-v1.5 --save_dir pretrain_model
+CUDA_VISIBLE_DEVICES=0 python3 -m sglang.launch_server --model-path pretrain_model/models--liuhaotian--llava-v1.5-7b --tokenizer-path pretrain_model/models--llava-hf--llava-1.5-7b-hf --port 30000
+python llava/eval/model_vqa.py --model-path checkpoints/llava-v1.5-7b-lora --model-base pretrain_model/models--liuhaotian--llava-v1.5-7b --question-file data/coco2014/question.jsonl --image-folder data/coco2014/coco2014_val --answers-file data/coco2014/answer.jsonl
+python hf_download.py --model liuhaotian/llava-v1.5-7b --save_dir pretrain_model
